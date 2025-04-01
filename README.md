@@ -1,4 +1,4 @@
-# test_open_cv
+# Berry Removing Prediction Application
 
 A new Flutter project.
 
