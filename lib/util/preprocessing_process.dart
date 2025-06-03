@@ -15,33 +15,38 @@ class PreprocessingProcess {
     Uint8List imageBytes,
   ) async {
     final totalStopwatch = Stopwatch()..start();
-
-    //!get bunch position
-    log('Starting preprocessing method...');
-    final bunchPositionStopwatch = Stopwatch()..start();
-    final bunchPosition = Utility.getBunchPosition(detectionResult);
-    log('Bunch position detection took: ${bunchPositionStopwatch.elapsedMilliseconds}ms');
-
-    //!decode to Mat file
-    final decodeStopwatch = Stopwatch()..start();
-    cv.Mat originalMat = cv.imdecode(imageBytes, cv.IMREAD_COLOR);
-    log('Image decode took: ${decodeStopwatch.elapsedMilliseconds}ms');
-
-    int imageWidth = originalMat.cols;
-    int imageHeight = originalMat.rows;
-
-    //!convert rect to correct pixels
-    final bunchPixels = Utility.convertToPixels(
-      bunchPosition!,
-      imageWidth,
-      imageHeight,
-    );
-
-    List<Uint8List> images = [];
-    List<img.Image> listImages = [];
-    List<ResultObjectDetection> berryPositions = [];
+    cv.Mat? originalMat;
+    List<cv.Mat> tempMats = [];
 
     try {
+      //!get bunch position
+      log('Starting preprocessing method...');
+      final bunchPositionStopwatch = Stopwatch()..start();
+      final bunchPosition = Utility.getBunchPosition(detectionResult);
+      log('Bunch position detection took: ${bunchPositionStopwatch.elapsedMilliseconds}ms');
+
+      //!decode to Mat file
+      final decodeStopwatch = Stopwatch()..start();
+      originalMat = cv.imdecode(imageBytes, cv.IMREAD_COLOR);
+      if (originalMat.cols == 0 || originalMat.rows == 0) {
+        throw Exception('Failed to decode image??????');
+      }
+      log('Image decode took: ${decodeStopwatch.elapsedMilliseconds}ms');
+
+      int imageWidth = originalMat.cols;
+      int imageHeight = originalMat.rows;
+
+      //!convert rect to correct pixels
+      final bunchPixels = Utility.convertToPixels(
+        bunchPosition!,
+        imageWidth,
+        imageHeight,
+      );
+
+      List<Uint8List> images = [];
+      List<img.Image> listImages = [];
+      List<ResultObjectDetection> berryPositions = [];
+
       //! Process each berry separately
       final totalBerryStopwatch = Stopwatch()..start();
       int berryCount = 0;
@@ -52,6 +57,8 @@ class PreprocessingProcess {
 
           //!Create a fresh copy of the original image for each berry
           cv.Mat imageMat = originalMat.clone();
+          tempMats.add(imageMat);
+
           await processBerry(
             detection,
             imageMat,
@@ -81,10 +88,16 @@ class PreprocessingProcess {
       log('Total processing time: ${totalStopwatch.elapsedMilliseconds}ms');
 
       return [byteBerryShouldBeRemoved];
-      // return images;
+    } catch (e) {
+      log('Error in preprocessing: $e');
+      return [];
     } finally {
       log("Cleaning up....");
-      originalMat.dispose();
+      // Clean up all temporary matrices
+      for (var mat in tempMats) {
+        mat.dispose();
+      }
+      originalMat?.dispose();
       PredictionProcess.instance.dispose();
     }
   }
@@ -100,6 +113,7 @@ class PreprocessingProcess {
     int berryIndex,
   ) async {
     final berryProcessStopwatch = Stopwatch()..start();
+    cv.Mat? imageCrop;
 
     try {
       //! Convert berry position to pixels
@@ -113,6 +127,7 @@ class PreprocessingProcess {
         imageWidth,
         imageHeight,
       );
+
       //! Create points and fill poly for this berry
       final polyStopwatch = Stopwatch()..start();
 
@@ -144,7 +159,7 @@ class PreprocessingProcess {
           bunchPixels.width.round(),
           bunchPixels.height.round());
 
-      cv.Mat imageCrop = cv.Mat.fromMat(imageMat, roi: cropRect, copy: true);
+      imageCrop = cv.Mat.fromMat(imageMat, roi: cropRect, copy: true);
 
       cv.resize(
         imageCrop,
@@ -158,19 +173,19 @@ class PreprocessingProcess {
       final beforeEncodeCropStopwatch = Stopwatch()..start();
 
       final bytes = cv.imencode(".png", imageCrop).$2;
-      var image = img.decodeImage(bytes);
+      final image = img.decodeImage(bytes);
+      if (image == null) {
+        log("⚠️ Failed to decode image");
+        return;
+      }
+      log('Berry $berryIndex just encode: ${beforeEncodeCropStopwatch.elapsedMilliseconds}ms');
 
-      log('Berry $berryIndex just endcode eieieieiie: ${beforeEncodeCropStopwatch.elapsedMilliseconds}ms');
-
-      images.add(img.encodeJpg(image!, quality: 85));
-
-      log("preprocess width: ${image.width}");
-      log("preprocess height: ${image.height}");
+      images.add(img.encodeJpg(image, quality: 85));
       listImages.add(image);
 
       log('Berry $berryIndex encode and crop took: ${encodeCropStopwatch.elapsedMilliseconds}ms');
     } finally {
-      imageMat.dispose();
+      imageCrop?.dispose();
     }
     log('Berry $berryIndex total process took: ${berryProcessStopwatch.elapsedMilliseconds}ms');
   }

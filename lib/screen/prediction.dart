@@ -71,6 +71,16 @@ class _MyPredictionScreenState extends State<MyPredictionScreen> {
     }
   }
 
+  void _resetAll() {
+    setState(() {
+      isPredictionProgress = false;
+      processingTime = null;
+      images.clear(); // Clear the list of images
+      images_prediction.clear();
+      yoloResults.clear();
+    });
+  }
+
   Future<void> yoloDetection(File imageFile) async {
     try {
       final totalStopwatch = Stopwatch()..start();
@@ -79,7 +89,7 @@ class _MyPredictionScreenState extends State<MyPredictionScreen> {
       final Uint8List? originalImageBytes =
           await Utility.compressFile(imageFile);
       // final Uint8List originalImageBytes = await imageFile.readAsBytes();
-
+      final yoloStopwatch = Stopwatch()..start();
       List<ResultObjectDetection> objDetect =
           await objectModel!.getImagePrediction(
         originalImageBytes!,
@@ -87,6 +97,7 @@ class _MyPredictionScreenState extends State<MyPredictionScreen> {
         iOUThreshold: 0.5,
         boxesLimit: 80,
       );
+      log('Yolo detection time: ${yoloStopwatch.elapsedMilliseconds}ms');
 
       if (!mounted) return;
 
@@ -105,12 +116,13 @@ class _MyPredictionScreenState extends State<MyPredictionScreen> {
 
       //! Log yolo detection
       YoloLogger.logDetectionResults(yoloResults);
-
+      final preProcessingStopwatch = Stopwatch()..start();
       //!Preprocessing
       images_prediction = await PreprocessingProcess.preprocessingMethod(
         yoloResults,
         originalImageBytes,
       );
+      log('Preprocessing time: ${preProcessingStopwatch.elapsedMilliseconds}ms');
 
       setState(() {
         images = images_prediction;
@@ -131,9 +143,12 @@ class _MyPredictionScreenState extends State<MyPredictionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Berry Removing Prediction'),
-      ),
+      appBar: AppBar(title: const Text('Berry Removing Prediction'), actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          onPressed: _resetAll, // Call reset function
+        ),
+      ]),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

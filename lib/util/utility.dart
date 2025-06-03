@@ -14,10 +14,21 @@ class Utility {
   static Future<Uint8List?> compressFile(File file) async {
     var result = await FlutterImageCompress.compressWithFile(
       file.absolute.path,
-      minWidth: 640,
-      minHeight: 640,
-      quality: 85,
-      // rotate: 90,
+      minWidth: 480,
+      minHeight: 480,
+      quality: 70,
+      format: CompressFormat.jpeg,
+    );
+    return result;
+  }
+
+  static Future<Uint8List?> compressFileListToList(Uint8List list) async {
+    var result = await FlutterImageCompress.compressWithList(
+      list,
+      minWidth: 480,
+      minHeight: 480,
+      quality: 70,
+      format: CompressFormat.jpeg,
     );
     return result;
   }

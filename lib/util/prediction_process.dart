@@ -44,6 +44,7 @@ class PredictionProcess {
     try {
       OrtEnv.instance.init();
       sessionOptions = OrtSessionOptions();
+
       final rawAssetFile =
           await rootBundle.load("assets/model/prediction_model.onnx");
       final bytes = rawAssetFile.buffer.asUint8List();
@@ -61,18 +62,28 @@ class PredictionProcess {
     List<double> mean,
     List<double> std,
   ) {
-    var bytes = Float32List(1 * image.height * image.width * 3);
-    var buffer = Float32List.view(bytes.buffer);
+    final int totalPixels = image.height * image.width;
+    final bytes = Float32List(1 * totalPixels * 3);
+    final buffer = Float32List.view(bytes.buffer);
 
-    int offsetG = image.height * image.width;
-    int offsetB = 2 * image.height * image.width;
-    int i = 0;
+    // Pre-calculate offsets and normalization factors
+    final offsetG = totalPixels;
+    final offsetB = 2 * totalPixels;
+
+    // Pre-calculate normalization factors
+    final rNorm = 1.0 / (255 * std[0]);
+    final gNorm = 1.0 / (255 * std[1]);
+    final bNorm = 1.0 / (255 * std[2]);
+
+    var i = 0;
     for (var y = 0; y < image.height; y++) {
       for (var x = 0; x < image.width; x++) {
-        Pixel pixel = image.getPixel(x, y);
-        buffer[i] = ((pixel.r / 255) - mean[0]) / std[0];
-        buffer[offsetG + i] = ((pixel.g / 255) - mean[1]) / std[1];
-        buffer[offsetB + i] = ((pixel.b / 255) - mean[2]) / std[2];
+        final pixel = image.getPixel(x, y);
+
+        // Optimize calculations by reducing divisions
+        buffer[i] = (pixel.r * rNorm) - (mean[0] / std[0]);
+        buffer[offsetG + i] = (pixel.g * gNorm) - (mean[1] / std[1]);
+        buffer[offsetB + i] = (pixel.b * bNorm) - (mean[2] / std[2]);
         i++;
       }
     }
@@ -108,13 +119,18 @@ class PredictionProcess {
       log("Running model...");
       final runOptions = OrtRunOptions();
       outputs = await _session?.runAsync(runOptions, inputs);
-      inputOrt.release();
-      runOptions.release();
+      runOptions.release(); // release runOptions
     } catch (e) {
-      log("Error while running color inference.");
+      log("Error while running color inference: $e");
+    } finally {
+      inputOrt.release();
+    }
+    if (outputs == null || outputs.isEmpty || outputs[0]?.value == null) {
+      log("Prediction output is null or empty.");
+      return Uint8List(0);
     }
 
-    final predictions = outputs?[0]?.value as List;
+    final predictions = outputs[0]!.value as List;
 
     log("Prediction result:\n ${predictions.toString()}");
 
@@ -153,6 +169,8 @@ class PredictionProcess {
       final bytes = cv.imencode(".png", removedImage).$2;
 
       log('Draw berry that should be removed and total processing took: ${drawRectangleStopwatch.elapsedMilliseconds}ms');
+
+      outputs.clear();
 
       return bytes;
     } else {

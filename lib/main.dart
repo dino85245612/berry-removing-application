@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:test_open_cv/screen/prediction.dart';
+import 'package:test_open_cv/navigate_menu.dart';
 
 void main() {
   runApp(const MyApp());
@@ -20,7 +20,9 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       // home: const MyHomePage(title: 'Flutter Demo Home Page'),
-      home: const MyPredictionScreen(),
+      // home: const MyPredictionScreen(),
+      // debugShowCheckedModeBanner: false,
+      home: NavigationMenu(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -49,23 +51,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              "Hi",
-              style: const TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      ),
-    );
+    return NavigationMenu();
   }
 }
